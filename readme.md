@@ -1,0 +1,3 @@
+![](sine.png)
+
+# pseudographics library
