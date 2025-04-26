@@ -1,164 +1,246 @@
 MODULE psGraphics;
-IMPORT Out, Strings, VT100, crt;
+IMPORT Out, crt, SYSTEM, Math;
 
-CONST
-  MaxW = 160;
-  MaxH = 100;
+CONST 
+  QuarterBlock* = 0;  DosShaded* = 1;
+  refX = 80; refY = 25;
+
+VAR 
+  pixelMode*: SET;
+  cell: ARRAY refY, refX OF INTEGER;
 
 TYPE
-  Pixel = RECORD
-    bits: SET;    (* set of 0..3 representing 4 pixels in a character cell *)
-    color: SHORTINT;
-  END;
+  CharSeq = ARRAY 5 OF CHAR;
 
 VAR
-  w, h: INTEGER;               (* width and height in virtual pixels *)
-  buf: ARRAY MaxH DIV 2, MaxW DIV 2 OF Pixel;
+  quarterChar: ARRAY 16 OF CharSeq;
+  shadingChar: ARRAY 5 OF CharSeq;
 
-CONST
-  UnicodeBlocks = ARRAY 16 OF CHAR {
-    " ",    (* 0000 *)
-    "▗",    (* 0001 *)
-    "▖",    (* 0010 *)
-    "▄",    (* 0011 *)
-    "▝",    (* 0100 *)
-    "▐",    (* 0101 *)
-    "▞",    (* 0110 *)
-    "▟",    (* 0111 *)
-    "▘",    (* 1000 *)
-    "▚",    (* 1001 *)
-    "▌",    (* 1010 *)
-    "▙",    (* 1011 *)
-    "▀",    (* 1100 *)
-    "▜",    (* 1101 *)
-    "▛",    (* 1110 *)
-    "█"     (* 1111 *)
-  };
+PROCEDURE Init*;
+BEGIN 
+  (* Quarter blocks *)
+  COPY(" ", quarterChar[0]);
+  COPY("▗", quarterChar[1]);
+  COPY("▖", quarterChar[2]);
+  COPY("▄", quarterChar[3]);
+  COPY("▝", quarterChar[4]);
+  COPY("▐", quarterChar[5]);
+  COPY("▞", quarterChar[6]);
+  COPY("▟", quarterChar[7]);
+  COPY("▘", quarterChar[8]);
+  COPY("▚", quarterChar[9]);
+  COPY("▌", quarterChar[10]);
+  COPY("▙", quarterChar[11]);
+  COPY("▀", quarterChar[12]);
+  COPY("▜", quarterChar[13]);
+  COPY("▛", quarterChar[14]);
+  COPY("█", quarterChar[15]);
 
-PROCEDURE Init*(width, height: INTEGER);
-VAR i, j: INTEGER;
-BEGIN
-  w := width; h := height;
-  FOR i := 0 TO h DIV 2 - 1 DO
-    FOR j := 0 TO w DIV 2 - 1 DO
-      buf[i, j].bits := {};
-      buf[i, j].color := crt.White;
-    END
-  END;
-  crt.ClrScr;
+  (* DOS shading blocks *)
+  COPY(" ", shadingChar[0]);
+  COPY("░", shadingChar[1]);
+  COPY("▒", shadingChar[2]);
+  COPY("▓", shadingChar[3]);
+  COPY("█", shadingChar[4]);
 END Init;
 
-PROCEDURE Clear*(color: SHORTINT);
+PROCEDURE Clear*;
 VAR i, j: INTEGER;
 BEGIN
-  FOR i := 0 TO h DIV 2 - 1 DO
-    FOR j := 0 TO w DIV 2 - 1 DO
-      buf[i, j].bits := {};
-      buf[i, j].color := color;
+  FOR i := 0 TO 24 DO
+    FOR j := 0 TO 79 DO
+      cell[i, j] := 0
     END
-  END;
+  END
 END Clear;
 
-PROCEDURE SetPixel(x, y: INTEGER; color: SHORTINT);
-VAR cx, cy, bit: INTEGER;
+PROCEDURE PutPixel*(x, y: INTEGER);
+VAR cx, cy, mask: INTEGER;
 BEGIN
-  IF (x < 0) OR (x >= w) OR (y < 0) OR (y >= h) THEN RETURN END;
+  IF (x < 0) OR (x >= 160) OR (y < 0) OR (y >= 50) THEN RETURN END;
   cx := x DIV 2;
   cy := y DIV 2;
-  bit := 0;
-  IF (x MOD 2 = 0) & (y MOD 2 = 0) THEN bit := 2;       (* top-left *)
-  ELSIF (x MOD 2 = 1) & (y MOD 2 = 0) THEN bit := 3;    (* top-right *)
-  ELSIF (x MOD 2 = 0) & (y MOD 2 = 1) THEN bit := 0;    (* bottom-left *)
-  ELSE bit := 1;                                        (* bottom-right *)
+  IF (cx < 0) OR (cx >= 80) OR (cy < 0) OR (cy >= 25) THEN RETURN END;
+  
+  IF (x MOD 2 = 0) & (y MOD 2 = 0) THEN mask := 8
+  ELSIF (x MOD 2 = 1) & (y MOD 2 = 0) THEN mask := 4
+  ELSIF (x MOD 2 = 0) & (y MOD 2 = 1) THEN mask := 2
+  ELSE mask := 1
   END;
-  INCL(buf[cy, cx].bits, bit);
-  buf[cy, cx].color := color;
-END SetPixel;
 
-PROCEDURE FlushChar(x, y: INTEGER);
-VAR ch: CHAR; bits, code: INTEGER;
-BEGIN
-  bits := 0; code := 0;
-  IF (x < 0) OR (x >= w DIV 2) OR (y < 0) OR (y >= h DIV 2) THEN RETURN END;
-  IF 0 IN buf[y,x].bits THEN INC(code, 1) END;
-  IF 1 IN buf[y,x].bits THEN INC(code, 2) END;
-  IF 2 IN buf[y,x].bits THEN INC(code, 4) END;
-  IF 3 IN buf[y,x].bits THEN INC(code, 8) END;
-  ch := UnicodeBlocks[code];
-  crt.GotoXY(x+1, y+1);
-  crt.TextColor(buf[y,x].color);
-  Out.Char(ch);
-END FlushChar;
+  cell[cy, cx] := cell[cy, cx] + mask;
+END PutPixel;
 
-PROCEDURE Refresh*;
-VAR y, x: INTEGER;
+
+PROCEDURE DrawLine*(x0, y0, x1, y1: INTEGER);
+VAR dx, dy, sx, sy, err: INTEGER;
 BEGIN
-  FOR y := 0 TO h DIV 2 - 1 DO
-    FOR x := 0 TO w DIV 2 - 1 DO
-      FlushChar(x, y);
-    END
+  dx := ABS(x1 - x0);
+  dy := ABS(y1 - y0);
+  IF x0 < x1 THEN sx := 1 ELSE sx := -1 END;
+  IF y0 < y1 THEN sy := 1 ELSE sy := -1 END;
+
+  IF dx > dy THEN
+    err := dx DIV 2;
+    WHILE x0 # x1 DO
+      PutPixel(x0, y0);
+      DEC(err, dy);
+      IF err < 0 THEN
+        INC(y0, sy);
+        INC(err, dx);
+      END;
+      INC(x0, sx);
+    END;
+  ELSE
+    err := dy DIV 2;
+    WHILE y0 # y1 DO
+      PutPixel(x0, y0);
+      DEC(err, dx);
+      IF err < 0 THEN
+        INC(x0, sx);
+        INC(err, dy);
+      END;
+      INC(y0, sy);
+    END;
   END;
-  crt.NormVideo;
-END Refresh;
-
-PROCEDURE DrawLine*(x0, y0, x1, y1, color: SHORTINT);
-VAR dx, dy, sx, sy, err, e2: INTEGER;
-BEGIN
-  dx := ABS(x1 - x0); sx := -1;
-  IF x0 < x1 THEN sx := 1 END;
-  dy := -ABS(y1 - y0); sy := -1;
-  IF y0 < y1 THEN sy := 1 END;
-  err := dx + dy;
-  WHILE TRUE DO
-    SetPixel(x0, y0, color);
-    IF (x0 = x1) & (y0 = y1) THEN EXIT END;
-    e2 := 2 * err;
-    IF e2 >= dy THEN err := err + dy; x0 := x0 + sx END;
-    IF e2 <= dx THEN err := err + dx; y0 := y0 + sy END;
-  END;
+  PutPixel(x1, y1);
 END DrawLine;
 
-PROCEDURE DrawRect*(x1, y1, x2, y2, color: SHORTINT);
+
+PROCEDURE DrawRect*(x, y, w, h: INTEGER);
+VAR x2, y2: INTEGER;
 BEGIN
-  DrawLine(x1, y1, x2, y1, color);
-  DrawLine(x2, y1, x2, y2, color);
-  DrawLine(x2, y2, x1, y2, color);
-  DrawLine(x1, y2, x1, y1, color);
+  x2 := x + w - 1;
+  y2 := y + h - 1;
+  DrawLine(x, y, x2, y);
+  DrawLine(x2, y, x2, y2);
+  DrawLine(x2, y2, x, y2);
+  DrawLine(x, y2, x, y);
 END DrawRect;
 
-PROCEDURE DrawCircle*(cx, cy, r, color: SHORTINT);
-VAR x, y, err: INTEGER;
+PROCEDURE DrawCircle*(cx, cy, r: INTEGER);
+VAR x, y, d: INTEGER;
 BEGIN
-  x := r; y := 0; err := 0;
-  WHILE x >= y DO
-    SetPixel(cx + x, cy + y, color);
-    SetPixel(cx + y, cy + x, color);
-    SetPixel(cx - y, cy + x, color);
-    SetPixel(cx - x, cy + y, color);
-    SetPixel(cx - x, cy - y, color);
-    SetPixel(cx - y, cy - x, color);
-    SetPixel(cx + y, cy - x, color);
-    SetPixel(cx + x, cy - y, color);
-    INC(y);
-    IF err <= 0 THEN err := err + 2 * y + 1
-    ELSE DEC(x); err := err - 2 * x + 1 END;
-  END;
+  IF r < 0 THEN r := -r END;
+  x := 0;  y := r;  
+  d := 3 - 2*r;
+  WHILE x <= y DO
+    PutPixel(cx + x, cy + y);
+    PutPixel(cx - x, cy + y);
+    PutPixel(cx + x, cy - y);
+    PutPixel(cx - x, cy - y);
+    PutPixel(cx + y, cy + x);
+    PutPixel(cx - y, cy + x);
+    PutPixel(cx + y, cy - x);
+    PutPixel(cx - y, cy - x);
+    IF d < 0 THEN
+      d := d + 4*x + 6
+    ELSE
+      d := d + 4*(x - y) + 10;
+      DEC(y)
+    END;
+    INC(x)
+  END
 END DrawCircle;
 
-PROCEDURE DrawOval*(cx, cy, rx, ry, color: SHORTINT);
-VAR x, y: INTEGER;
-    angle: REAL;
-    pi := 3.14159;
-    step := 0.01;
+PROCEDURE DrawOval*(cx, cy, a, b: INTEGER);
+VAR
+  x, y: INTEGER;
+  a2, b2: LONGINT;
+  la, lb, lx, ly, ly1: LONGINT;
+  d1, d2, px, py: LONGINT;
 BEGIN
-  angle := 0.0;
-  WHILE angle <= 2*pi DO
-    x := cx + ENTIER(rx * Math.cos(angle));
-    y := cy + ENTIER(ry * Math.sin(angle));
-    SetPixel(x, y, color);
-    angle := angle + step;
+  SYSTEM.GET(SYSTEM.ADR(a), la);
+  SYSTEM.GET(SYSTEM.ADR(b), lb);
+
+  a2 := la * la;
+  b2 := lb * lb;
+
+  x := 0; y := b;
+
+  SYSTEM.GET(SYSTEM.ADR(x), lx);
+  SYSTEM.GET(SYSTEM.ADR(y), ly);
+
+  d1 := b2 - (a2 * lb) + (a2 DIV 4);
+  px := 0; py := 2 * a2 * lb;
+
+  WHILE px < py DO
+    PutPixel(cx + x, cy + y);
+    PutPixel(cx - x, cy + y);
+    PutPixel(cx + x, cy - y);
+    PutPixel(cx - x, cy - y);
+    INC(x);
+    SYSTEM.GET(SYSTEM.ADR(x), lx);
+    px := px + 2 * b2;
+    IF d1 < 0 THEN
+      d1 := d1 + px + b2
+    ELSE
+      DEC(y);
+      SYSTEM.GET(SYSTEM.ADR(y), ly);
+      py := py - 2 * a2;
+      d1 := d1 + px - py + b2
+    END;
   END;
+
+  SYSTEM.GET(SYSTEM.ADR(x), lx);
+  SYSTEM.GET(SYSTEM.ADR(y), ly);
+
+  d2 := b2*(lx*lx) + a2*(ly*ly) - a2*b2;
+
+  WHILE y >= 0 DO
+    PutPixel(cx + x, cy + y);
+    PutPixel(cx - x, cy + y);
+    PutPixel(cx + x, cy - y);
+    PutPixel(cx - x, cy - y);
+    DEC(y);
+    SYSTEM.GET(SYSTEM.ADR(y), ly);
+    py := py - 2*a2;
+    IF d2 > 0 THEN
+      d2 := d2 + a2 - py
+    ELSE
+      INC(x);
+      SYSTEM.GET(SYSTEM.ADR(x), lx);
+      px := px + 2*b2;
+      d2 := d2 + a2 - py + px
+    END
+  END
 END DrawOval;
 
-END psGraphics.
+PROCEDURE Refresh*;
+VAR i, j, bits, count: INTEGER;
+BEGIN
+  crt.GotoXY(1,1);
+  crt.ClrScr;
+  FOR i := 0 TO 24 DO
+    FOR j := 0 TO 79 DO
+      bits := cell[i,j];
+      IF QuarterBlock IN pixelMode THEN
+        IF (bits >= 0) & (bits <= 15) THEN
+          Out.String(quarterChar[bits])
+        ELSE
+          Out.String(" ")  (* if out of range, print space *)
+        END
+      ELSE
+        count := 0;
+        IF (bits MOD 2 # 0) THEN INC(count) END;
+        IF (bits DIV 2 MOD 2 # 0) THEN INC(count) END;
+        IF (bits DIV 4 MOD 2 # 0) THEN INC(count) END;
+        IF (bits DIV 8 MOD 2 # 0) THEN INC(count) END;
+        IF (count >= 0) & (count <= 4) THEN
+          Out.String(shadingChar[count])
+        ELSE
+          Out.String(" ")  (* safe fallback *)
+        END
+      END;
+    END;
+    Out.Ln;
+  END;
+  Out.String("*** Refresh complete ***");
+  Out.Ln
+END Refresh;
 
+
+BEGIN
+  pixelMode := {QuarterBlock};
+  Init;
+END psGraphics.
