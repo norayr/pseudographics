@@ -1,14 +1,14 @@
 MODULE psGraphics;
 IMPORT Out, crt, SYSTEM, Math;
 
-CONST 
+CONST
   QuarterBlock* = 0;  DosShaded* = 1;
   refX = 80; refY = 25;
 
-VAR 
+VAR
   pixelMode*: SET;
   cell: ARRAY refY, refX OF INTEGER;
-
+  actX, actY: INTEGER;
 TYPE
   CharSeq = ARRAY 5 OF CHAR;
 
@@ -17,7 +17,8 @@ VAR
   shadingChar: ARRAY 5 OF CharSeq;
 
 PROCEDURE Init*;
-BEGIN 
+BEGIN
+  actX := refX; actY := refY;
   (* Quarter blocks *)
   COPY(" ", quarterChar[0]);
   COPY("▗", quarterChar[1]);
@@ -44,6 +45,11 @@ BEGIN
   COPY("█", shadingChar[4]);
 END Init;
 
+PROCEDURE SetResolution*(x, y: INTEGER);
+BEGIN
+  actX := x; actY := y
+END SetResolution;
+
 PROCEDURE Clear*;
 VAR i, j: INTEGER;
 BEGIN
@@ -57,11 +63,11 @@ END Clear;
 PROCEDURE PutPixel*(x, y: INTEGER);
 VAR cx, cy, mask: INTEGER;
 BEGIN
-  IF (x < 0) OR (x >= 160) OR (y < 0) OR (y >= 50) THEN RETURN END;
+  IF (x < 0) OR (x >= actX*2) OR (y < 0) OR (y >= actY*2) THEN RETURN END;
   cx := x DIV 2;
   cy := y DIV 2;
-  IF (cx < 0) OR (cx >= 80) OR (cy < 0) OR (cy >= 25) THEN RETURN END;
-  
+  IF (cx < 0) OR (cx >= actX) OR (cy < 0) OR (cy >= actY) THEN RETURN END;
+
   IF (x MOD 2 = 0) & (y MOD 2 = 0) THEN mask := 8
   ELSIF (x MOD 2 = 1) & (y MOD 2 = 0) THEN mask := 4
   ELSIF (x MOD 2 = 0) & (y MOD 2 = 1) THEN mask := 2
@@ -122,7 +128,7 @@ PROCEDURE DrawCircle*(cx, cy, r: INTEGER);
 VAR x, y, d: INTEGER;
 BEGIN
   IF r < 0 THEN r := -r END;
-  x := 0;  y := r;  
+  x := 0;  y := r;
   d := 3 - 2*r;
   WHILE x <= y DO
     PutPixel(cx + x, cy + y);
