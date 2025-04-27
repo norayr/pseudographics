@@ -8,6 +8,14 @@ VAR
   angle, step, sineVal: REAL;
   x, y: INTEGER;
 
+PROCEDURE CleanUp;
+BEGIN
+  (* Clear status line explicitly *)
+  crt.GotoXY(1, psGraphics.offsetY + psGraphics.actY + 1);
+  Out.String("                                                      "); (* Clear line *)
+END CleanUp;
+
+
 BEGIN
   crt.ClrScr;
   psGraphics.pixelMode := {psGraphics.QuarterBlock};
@@ -37,7 +45,7 @@ BEGIN
 
   Out.String("Refreshing..."); Out.Ln;
   psGraphics.Refresh;
-
+  CleanUp;
   Out.String("Wait 3 seconds before exiting..."); Out.Ln;
   crt.Delay(3000);
 END DemoSine2.

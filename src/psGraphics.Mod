@@ -12,7 +12,7 @@ TYPE
 VAR
   pixelMode*: SET;
   cell: Surface;
-  offsetX, offsetY: INTEGER;
+  offsetX-, offsetY-: INTEGER;
   actX-, actY-: INTEGER;
   quarterChar: ARRAY 16 OF CharSeq;
   shadingChar: ARRAY 5 OF CharSeq;
@@ -253,12 +253,13 @@ BEGIN
       END;
     END;
   END;
-  
-  (* Move to new line before status message *)
-  crt.GotoXY(1, offsetY + actY + 1);  (* Position after viewport *)
+
+  (* Status message positioning *)
+  crt.GotoXY(1, offsetY + actY + 1);
   Out.String("*** Refresh complete ***");
   Out.Ln
 END Refresh;
+
 BEGIN
   pixelMode := {QuarterBlock};
   Init;
