@@ -253,10 +253,12 @@ BEGIN
       END;
     END;
   END;
+  
+  (* Move to new line before status message *)
+  crt.GotoXY(1, offsetY + actY + 1);  (* Position after viewport *)
   Out.String("*** Refresh complete ***");
   Out.Ln
 END Refresh;
-
 BEGIN
   pixelMode := {QuarterBlock};
   Init;
