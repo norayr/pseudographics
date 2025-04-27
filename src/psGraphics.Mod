@@ -3,23 +3,24 @@ IMPORT Out, crt, SYSTEM, Math;
 
 CONST
   QuarterBlock* = 0;  DosShaded* = 1;
-  refX = 80; refY = 25;
 
-VAR
-  pixelMode*: SET;
-  cell: ARRAY refY, refX OF INTEGER;
-  actX, actY: INTEGER;
 TYPE
+  RowArray = POINTER TO ARRAY OF INTEGER;
+  Surface = POINTER TO ARRAY OF RowArray;
   CharSeq = ARRAY 5 OF CHAR;
 
 VAR
+  pixelMode*: SET;
+  cell: Surface;
+  offsetX, offsetY: INTEGER;
+  actX-, actY-: INTEGER;
   quarterChar: ARRAY 16 OF CharSeq;
   shadingChar: ARRAY 5 OF CharSeq;
 
+
 PROCEDURE Init*;
 BEGIN
-  actX := refX; actY := refY;
-  (* Quarter blocks *)
+  (* Initialize character tables *)
   COPY(" ", quarterChar[0]);
   COPY("▗", quarterChar[1]);
   COPY("▖", quarterChar[2]);
@@ -37,7 +38,6 @@ BEGIN
   COPY("▛", quarterChar[14]);
   COPY("█", quarterChar[15]);
 
-  (* DOS shading blocks *)
   COPY(" ", shadingChar[0]);
   COPY("░", shadingChar[1]);
   COPY("▒", shadingChar[2]);
@@ -45,27 +45,48 @@ BEGIN
   COPY("█", shadingChar[4]);
 END Init;
 
-PROCEDURE SetResolution*(x, y: INTEGER);
+PROCEDURE SetViewport*(ox, oy, ax, ay: INTEGER);
+VAR i: INTEGER;
 BEGIN
-  actX := x; actY := y
-END SetResolution;
+  offsetX := ox;
+  offsetY := oy;
+  actX := ax;
+  actY := ay;
+
+  (* Allocate new surface *)
+  IF (actX > 0) & (actY > 0) THEN
+    NEW(cell, actY);
+    FOR i := 0 TO actY-1 DO
+      NEW(cell^[i], actX);
+    END;
+  ELSE
+    cell := NIL;
+  END;
+END SetViewport;
 
 PROCEDURE Clear*;
 VAR i, j: INTEGER;
 BEGIN
-  FOR i := 0 TO 24 DO
-    FOR j := 0 TO 79 DO
-      cell[i, j] := 0
-    END
-  END
+  IF cell # NIL THEN
+    FOR i := 0 TO actY-1 DO
+      FOR j := 0 TO actX-1 DO
+        cell^[i]^[j] := 0;
+      END;
+    END;
+  END;
 END Clear;
 
+
 PROCEDURE PutPixel*(x, y: INTEGER);
-VAR cx, cy, mask: INTEGER;
+VAR
+  cx, cy, mask: INTEGER;
 BEGIN
   IF (x < 0) OR (x >= actX*2) OR (y < 0) OR (y >= actY*2) THEN RETURN END;
+  IF cell = NIL THEN RETURN END;
+
   cx := x DIV 2;
   cy := y DIV 2;
+
   IF (cx < 0) OR (cx >= actX) OR (cy < 0) OR (cy >= actY) THEN RETURN END;
 
   IF (x MOD 2 = 0) & (y MOD 2 = 0) THEN mask := 8
@@ -74,9 +95,8 @@ BEGIN
   ELSE mask := 1
   END;
 
-  cell[cy, cx] := cell[cy, cx] + mask;
+  cell^[cy]^[cx] := cell^[cy]^[cx] + mask;
 END PutPixel;
-
 
 PROCEDURE DrawLine*(x0, y0, x1, y1: INTEGER);
 VAR dx, dy, sx, sy, err: INTEGER;
@@ -111,7 +131,6 @@ BEGIN
   END;
   PutPixel(x1, y1);
 END DrawLine;
-
 
 PROCEDURE DrawRect*(x, y, w, h: INTEGER);
 VAR x2, y2: INTEGER;
@@ -215,16 +234,17 @@ END DrawOval;
 PROCEDURE Refresh*;
 VAR i, j, bits, count: INTEGER;
 BEGIN
-  crt.GotoXY(1,1);
-  crt.ClrScr;
-  FOR i := 0 TO 24 DO
-    FOR j := 0 TO 79 DO
-      bits := cell[i,j];
+  IF cell = NIL THEN RETURN END;
+
+  FOR i := 0 TO actY-1 DO
+    crt.GotoXY(offsetX + 1, offsetY + i + 1);
+    FOR j := 0 TO actX-1 DO
+      bits := cell^[i]^[j];
       IF QuarterBlock IN pixelMode THEN
         IF (bits >= 0) & (bits <= 15) THEN
           Out.String(quarterChar[bits])
         ELSE
-          Out.String(" ")  (* if out of range, print space *)
+          Out.String(" ")
         END
       ELSE
         count := 0;
@@ -235,18 +255,20 @@ BEGIN
         IF (count >= 0) & (count <= 4) THEN
           Out.String(shadingChar[count])
         ELSE
-          Out.String(" ")  (* safe fallback *)
+          Out.String(" ")
         END
       END;
     END;
-    Out.Ln;
   END;
   Out.String("*** Refresh complete ***");
   Out.Ln
 END Refresh;
 
-
 BEGIN
   pixelMode := {QuarterBlock};
   Init;
+  cell := NIL;
+  offsetX := 0; offsetY := 0;
+  actX := 80; actY := 25;
+  SetViewport(0, 0, actX, actY);
 END psGraphics.

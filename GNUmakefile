@@ -49,6 +49,7 @@ buildThis:
 tests:
 	cd $(BUILD) && $(VOC) $(mkfile_dir_path)/test/Demo.Mod -m
 	cd $(BUILD) && $(VOC) $(mkfile_dir_path)/test/DemoSine.Mod -m
+	cd $(BUILD) && $(VOC) $(mkfile_dir_path)/test/DemoSine2.Mod -m
 	#build/testList
 
 clean:
