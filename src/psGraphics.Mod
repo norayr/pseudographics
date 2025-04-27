@@ -1,5 +1,5 @@
 MODULE psGraphics;
-IMPORT Out, crt, SYSTEM, Math;
+IMPORT Out, crt, Math;
 
 CONST
   QuarterBlock* = 0;  DosShaded* = 1;
@@ -172,22 +172,18 @@ PROCEDURE DrawOval*(cx, cy, a, b: INTEGER);
 VAR
   x, y: INTEGER;
   a2, b2: LONGINT;
-  la, lb, lx, ly, ly1: LONGINT;
+  lx, ly: LONGINT;
   d1, d2, px, py: LONGINT;
 BEGIN
-  SYSTEM.GET(SYSTEM.ADR(a), la);
-  SYSTEM.GET(SYSTEM.ADR(b), lb);
-
-  a2 := la * la;
-  b2 := lb * lb;
+  a2 := a * a;  (* Direct conversion to LONGINT *)
+  b2 := b * b;
 
   x := 0; y := b;
+  lx := x;  (* Direct assignment instead of SYSTEM.GET *)
+  ly := y;
 
-  SYSTEM.GET(SYSTEM.ADR(x), lx);
-  SYSTEM.GET(SYSTEM.ADR(y), ly);
-
-  d1 := b2 - (a2 * lb) + (a2 DIV 4);
-  px := 0; py := 2 * a2 * lb;
+  d1 := b2 - (a2 * b) + (a2 DIV 4);
+  px := 0; py := 2 * a2 * b;
 
   WHILE px < py DO
     PutPixel(cx + x, cy + y);
@@ -195,20 +191,17 @@ BEGIN
     PutPixel(cx + x, cy - y);
     PutPixel(cx - x, cy - y);
     INC(x);
-    SYSTEM.GET(SYSTEM.ADR(x), lx);
+    lx := x;  (* Update longint version *)
     px := px + 2 * b2;
     IF d1 < 0 THEN
       d1 := d1 + px + b2
     ELSE
       DEC(y);
-      SYSTEM.GET(SYSTEM.ADR(y), ly);
+      ly := y;  (* Update longint version *)
       py := py - 2 * a2;
       d1 := d1 + px - py + b2
     END;
   END;
-
-  SYSTEM.GET(SYSTEM.ADR(x), lx);
-  SYSTEM.GET(SYSTEM.ADR(y), ly);
 
   d2 := b2*(lx*lx) + a2*(ly*ly) - a2*b2;
 
@@ -218,13 +211,13 @@ BEGIN
     PutPixel(cx + x, cy - y);
     PutPixel(cx - x, cy - y);
     DEC(y);
-    SYSTEM.GET(SYSTEM.ADR(y), ly);
+    ly := y;  (* Update longint version *)
     py := py - 2*a2;
     IF d2 > 0 THEN
       d2 := d2 + a2 - py
     ELSE
       INC(x);
-      SYSTEM.GET(SYSTEM.ADR(x), lx);
+      lx := x;  (* Update longint version *)
       px := px + 2*b2;
       d2 := d2 + a2 - py + px
     END
